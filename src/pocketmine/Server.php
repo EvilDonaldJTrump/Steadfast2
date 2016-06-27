@@ -274,6 +274,7 @@ class Server{
 		
 
 	public $packetMaker = null;
+	public $packetEncoder = null;
 
 	
 	public function isUseAnimal() {
@@ -2039,6 +2040,7 @@ class Server{
 		$this->logger->info("Done (" . round(microtime(true) - \pocketmine\START_TIME, 3) . 's)! For help, type "help" or "?"');
 
 		$this->packetMaker = new PacketMaker($this->getLoader());
+		$this->packetEncoder = new PacketEncoder($this->getLoader());
 		
 		$this->tickAverage = array();
 		$this->useAverage = array();
@@ -2390,10 +2392,11 @@ class Server{
 		
 
 		while (strlen($str = $this->packetMaker->readThreadToMainPacket()) > 0) {
-			$data = unserialize($str);
-			if (isset($this->players[$data['identifier']])) {
-				$this->mainInterface->putReadyPacket($this->players[$data['identifier']], $data['buffer']);
-			}
+			$this->packetEncoder->pushMainToThreadPacket($str);
+		}
+		
+		while (strlen($str = $this->packetEncoder->readThreadToMainPacket()) > 0) {
+			$this->mainInterface->putReadyPacket($str);
 		}
 
 		//Timings::$connectionTimer->startTiming();

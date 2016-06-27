@@ -237,50 +237,23 @@ class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 	 * $player - packet recipient
 	 */
 	public function putPacket(Player $player, DataPacket $packet, $needACK = false, $immediate = false){
-		if(isset($this->identifiers[$player])){
-			$additionalChar = $player->getAdditionalChar();
-			
-			$identifier = $this->identifiers[$player];
-			$pk = null;
+		if (isset($this->identifiers[$player])) {
 			if(!$packet->isEncoded){
 				$packet->encode();
-			}elseif(!$needACK){
-				if (isset($packet->__encapsulatedPacket)) {
-					unset($packet->__encapsulatedPacket);
-				}
-				$packet->updateBuffer($additionalChar);
-				$packet->__encapsulatedPacket = new CachedEncapsulatedPacket;
-				$packet->__encapsulatedPacket->identifierACK = null;
-				$packet->__encapsulatedPacket->buffer = $additionalChar . $packet->buffer;
-				$packet->__encapsulatedPacket->reliability = 3;
-				$pk = $packet->__encapsulatedPacket;
 			}
-
-			if(!$immediate and !$needACK and $packet->pid() !== ProtocolInfo::BATCH_PACKET
-				and Network::$BATCH_THRESHOLD >= 0
-				and strlen($packet->buffer) >= Network::$BATCH_THRESHOLD){
+			if ($packet->pid() !== ProtocolInfo::BATCH_PACKET && Network::$BATCH_THRESHOLD >= 0 && strlen($packet->buffer) >= Network::$BATCH_THRESHOLD) {
 				$this->server->batchPackets([$player], [$packet], true);
 				return null;
 			}
-
-			if($pk === null){
-				$packet->updateBuffer($additionalChar);
-				$pk = new EncapsulatedPacket();
-				$pk->buffer = $additionalChar . $packet->buffer;
-				$pk->reliability = 3;
-
-				if($needACK === true){
-					$pk->identifierACK = $this->identifiersACK[$identifier]++;
-				}
-			}
-			
-			if($player->encryptEnabled) {
-				$pk->buffer = $additionalChar . $player->getEncrypt(substr($pk->buffer,1));
-			}
-
-			$this->interface->sendEncapsulated($identifier, $pk, ($needACK === true ? RakLib::FLAG_NEED_ACK : 0) | ($immediate === true ? RakLib::PRIORITY_IMMEDIATE : RakLib::PRIORITY_NORMAL));
+			$additionalChar =  $player->getAdditionalChar();
+			$packet->updateBuffer($additionalChar);
+			$data = array(
+				'identifier' => $this->identifiers[$player],
+				'buffer' => $packet->buffer,
+				'additionalChar' =>$additionalChar
+			);
+			$this->server->packetEncoder->pushMainToThreadPacket(serialize($data));
 		}
-
 		return null;
 	}
 	
@@ -315,18 +288,8 @@ class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 		return $data;
 	}
 	
-	public function putReadyPacket($player, $buffer) {
-		if (isset($this->identifiers[$player])) {
-			$identifier = $this->identifiers[$player];
-			$additionalChar = $player->getAdditionalChar();
-			if ($player->encryptEnabled) {
-				$buffer = $player->getEncrypt($buffer);
-			}
-			$pk = new EncapsulatedPacket();
-			$pk->buffer = $additionalChar . $buffer;
-			$pk->reliability = 3;
-			$this->interface->sendEncapsulated($identifier, $pk, RakLib::PRIORITY_NORMAL);
-		}
+	public function putReadyPacket($buffer) {
+		$this->interface->sendReadyEncapsulated($buffer);
 	}
 
 }

@@ -87,7 +87,7 @@ class PacketMaker extends Worker {
 				foreach ($moveData['data'] as $singleMoveData) {
 					$pk = new MoveEntityPacket($moveData['additionalChar']);
 					$pk->entities = [$singleMoveData];
-					$res = $this->tempMakeBuffer($identifier, $moveData['additionalChar'], $pk, false, false);
+					$res = $this->makeBuffer($identifier, $moveData['additionalChar'], $pk, false, false);
 					$this->externalQueue[] = $res;
 				}
 			}	
@@ -95,7 +95,7 @@ class PacketMaker extends Worker {
 				foreach ($motionData['data'] as $singleMotionData) {
 					$pk = new SetEntityMotionPacket($motionData['additionalChar']);
 					$pk->entities = [$singleMotionData];
-					$res = $this->tempMakeBuffer($identifier, $motionData['additionalChar'], $pk, false, false);
+					$res = $this->makeBuffer($identifier, $motionData['additionalChar'], $pk, false, false);
 					$this->externalQueue[] = $res;
 				}
 			}
@@ -129,13 +129,13 @@ class PacketMaker extends Worker {
 			$pk15->encode();
 			$pk15->isEncoded = true;
 			foreach($data['targets'] as $target){
-				$this->externalQueue[] = $this->tempMakeBuffer($target[0], $target[1], ($target[1] == chr(0xfe) ? $pk15 : $pk), false, false);
+				$this->externalQueue[] = $this->makeBuffer($target[0], $target[1], ($target[1] == chr(0xfe) ? $pk15 : $pk), false, false);
 			}
 		}
 		
 	}
         
-        protected function tempMakeBuffer($identifier, $additionalChar, $fullPacket, $needACK, $identifierACK) {
+	protected function makeBuffer($identifier, $additionalChar, $fullPacket, $needACK, $identifierACK) {
 		if (!$fullPacket->isEncoded) {
 			$fullPacket->encode();
 		}
@@ -143,43 +143,11 @@ class PacketMaker extends Worker {
 		$data = array(
 			'identifier' => $identifier,
 			'buffer' => $fullPacket->buffer,
+			'additionalChar' => $additionalChar
 		);
 		return serialize($data);
 	}
 
-	protected function makeBuffer($identifier, $additionalChar, $fullPacket, $needACK, $identifierACK) {		
-		$pk = null;
-		if (!$fullPacket->isEncoded) {
-			$fullPacket->encode();
-		} elseif (!$needACK) {
-			if (isset($fullPacket->__encapsulatedPacket)) {
-				unset($fullPacket->__encapsulatedPacket);
-			}
-			$fullPacket->updateBuffer($additionalChar);
-			$fullPacket->__encapsulatedPacket = new CachedEncapsulatedPacket();
-			$fullPacket->__encapsulatedPacket->identifierACK = null;
-			$fullPacket->__encapsulatedPacket->buffer = $additionalChar . $fullPacket->buffer;
-			$fullPacket->__encapsulatedPacket->reliability = 2;
-			$pk = $fullPacket->__encapsulatedPacket;
-		}
-
-		if ($pk === null) {
-			$fullPacket->updateBuffer($additionalChar);
-			$pk = new EncapsulatedPacket();			
-			$pk->buffer = $additionalChar . $fullPacket->buffer;
-			$pk->reliability = 2;
-
-			if ($needACK === true && $identifierACK !== false) {
-				$pk->identifierACK = $identifierACK;
-			}
-		}
-
-		$flags = ($needACK === true ? RakLib::FLAG_NEED_ACK : RakLib::PRIORITY_NORMAL) | (RakLib::PRIORITY_NORMAL);
-
-		$buffer = chr(RakLib::PACKET_ENCAPSULATED) . chr(strlen($identifier)) . $identifier . chr($flags) . $pk->toBinary(true);
-
-		return $buffer;
-	}
 	
 	public function shutdown(){		
 		$this->shutdown = true;

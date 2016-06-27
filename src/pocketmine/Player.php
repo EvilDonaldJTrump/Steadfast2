@@ -3157,15 +3157,18 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 			$this->hasSpawned = [];
 			$this->spawnPosition = null;
 			unset($this->buffer);
-			if(isset($this->encryptChiper)) {
-				mcrypt_generic_deinit($this->encryptChiper);
-				mcrypt_module_close($this->encryptChiper);
-				$this->encryptChiper = null;
-			}
+			
 			if(isset($this->decryptChiper)) {
 				mcrypt_generic_deinit($this->decryptChiper);
 				mcrypt_module_close($this->decryptChiper);
 				$this->decryptChiper = null;
+				
+				$data = array(
+					'stopEncrypt' => true,
+					'identifier' => $this->getIdentifier()
+
+				);
+				$this->server->packetEncoder->pushMainToThreadPacket(serialize($data));
 			}	
 		}
 			
@@ -3641,12 +3644,9 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 	protected $sendPacketCounter = 0;
 	protected $finalSecretKey = "";
 	protected $finalIV = "";	
-	protected $encryptChiper;
 	protected $decryptChiper;
 
-	public function getEncrypt($sStr) {
-		return mcrypt_generic($this->encryptChiper, $sStr . $this->getCheckSum($sStr));
-	}
+
 
 	public function getDecrypt($sStr) {
 		return mdecrypt_generic($this->decryptChiper, $sStr);
@@ -3656,10 +3656,16 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 		$this->finalSecretKey = hex2bin(hash("sha256", $token . $secret));
 		$this->finalIV = substr($this->finalSecretKey, 0, 16);
 		$this->encryptEnabled = true;
-		$this->encryptChiper = mcrypt_module_open(MCRYPT_RIJNDAEL_128, '', MCRYPT_MODE_CFB, '');
-		mcrypt_generic_init($this->encryptChiper, $this->finalSecretKey, $this->finalIV);
 		$this->decryptChiper = mcrypt_module_open(MCRYPT_RIJNDAEL_128, '', MCRYPT_MODE_CFB, '');
 		mcrypt_generic_init($this->decryptChiper, $this->finalSecretKey, $this->finalIV);
+		$data = array(
+			'startEncrypt' => true,
+			'finalSecretKey' => $this->finalSecretKey,
+			'finalIV' => $this->finalIV,
+			'identifier' => $this->getIdentifier()
+			
+		);
+		$this->server->packetEncoder->pushMainToThreadPacket(serialize($data));
 	}
 
 	protected function getCheckSum($packetPlaintext) {
