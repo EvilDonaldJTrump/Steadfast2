@@ -34,6 +34,7 @@ use pocketmine\nbt\tag\StringTag;
 use pocketmine\network\Network;
 use pocketmine\network\protocol\AddItemEntityPacket;
 use pocketmine\Player;
+use pocketmine\nbt\NBT;
 
 class Item extends Entity{
 	const NETWORK_ID = 64;
@@ -70,7 +71,7 @@ class Item extends Entity{
 		if(isset($this->namedtag->Thrower)){
 			$this->thrower = $this->namedtag["Thrower"];
 		}
-		$this->item = ItemItem::get($this->namedtag->Item["id"], $this->namedtag->Item["Damage"], $this->namedtag->Item["Count"]);
+		$this->item = NBT::getItemHelper($this->namedtag->Item);
 
 
 		$this->server->getPluginManager()->callEvent(new ItemSpawnEvent($this));
@@ -227,7 +228,7 @@ class Item extends Entity{
 		$pk->item = $this->getItem();
 		$player->dataPacket($pk);
 
-		$this->sendData($player);
+//		$this->sendData($player);
 
 		parent::spawnTo($player);
 	}

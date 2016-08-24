@@ -210,6 +210,9 @@ class Server{
 	
 	/** @var bool */
 	private $autoGenerate;
+	
+	/** @var bool */
+	private $savePlayerData;
 
 	/** @var RCON */
 	private $rcon;
@@ -274,9 +277,17 @@ class Server{
 		
 
 	public $packetMaker = null;
-	public $packetEncoder = null;
 
+	public $packetEncoder = null;
 	
+	private $signTranslation = [];
+	
+	private $globalCompasPosition = array(
+		'x' => 15000,
+		'y' => 10,
+		'z' => -1000000
+	);
+
 	public function isUseAnimal() {
 		return $this->useAnimal;
 	}
@@ -420,6 +431,21 @@ class Server{
 	 */
 	public function setAutoGenerate($value){
 		$this->autoGenerate = (bool) $value;		
+	}
+	
+	/**
+	 * @return bool
+	 */
+	public function getSavePlayerData(){
+		return $this->savePlayerData;
+	}
+
+	
+	/**
+	 * @param bool $value
+	 */
+	public function setSavePlayerData($value) {
+		$this->savePlayerData = (bool) $value;		
 	}
 
 	/**
@@ -1473,7 +1499,8 @@ class Server{
 			"enable-rcon" => false,
 			"rcon.password" => substr(base64_encode(@Utils::getRandomBytes(20, false)), 3, 10),
 			"auto-save" => true,
-			"auto-generate" => false
+			"auto-generate" => false,
+			"save-player-data" => false
 		]);
 
 		ServerScheduler::$WORKERS = 4;
@@ -1503,6 +1530,7 @@ class Server{
 		$this->maxPlayers = $this->getConfigInt("max-players", 20);
 		$this->setAutoSave($this->getConfigBoolean("auto-save", true));
 		$this->setAutoGenerate($this->getConfigBoolean("auto-generate", false));
+		$this->setSavePlayerData($this->getConfigBoolean("save-player-data", false));
 		
 		$this->useAnimal = $this->getConfigBoolean("spawn-animals", false);
 		$this->animalLimit = $this->getConfigInt("animals-limit", 0);
@@ -1782,7 +1810,7 @@ class Server{
 	public function batchPackets(array $players, array $packets, $forceSync = true){
 		$targets = [];
 		foreach($players as $p){
-			$targets[] = array($p->getIdentifier(), $p->getAdditionalChar());
+			$targets[] = array($p->getIdentifier());
 		}
 		$newPackets = array();
 		foreach($packets as $p){
@@ -2002,6 +2030,7 @@ class Server{
 	 * Starts the PocketMine-MP server and starts processing ticks and packets
 	 */
 	public function start(){
+		$this->loadSignTranslation();		
 		if($this->getConfigBoolean("enable-query", true) === true){
 			$this->queryHandler = new QueryHandler();
 		}
@@ -2510,6 +2539,7 @@ class Server{
 		return 'MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEqofKIr6LBTeOscce8yCtdG4dO2KLp5uYWfdB4IJUKjhVAvJdv1UpbDpUXjhydgq3NhfeSpYmLG9dnpi/kpLcKfj0Hb0omhR86doxE7XwuMAKYLHOHX6BnXpDHXyQ6g5f';
 	}
 	
+
 	public function getServerPrivateKey() {
 		return 'MB8CAQAwEAYHKoZIzj0CAQYFK4EEACIECDAGAgEBBAEB';
 	}
@@ -2528,5 +2558,48 @@ class Server{
 	public function isUseEncrypt() {
 		return true;
 	}
+
+	private function loadSignTranslation() {
+		$languages = ['en' => 'English', 'de' => 'German', 'es' => 'Spanish'];
+		$signTranslation = [];
+		foreach ($languages as $langKey => $language) {
+			$path = 'worlds/world/signData/' . $langKey . '.json';
+			if (!file_exists($path)) {
+					continue;
+				}
+			$data = json_decode(file_get_contents($path), true);
+			if ($data) {
+				$signTranslation[$language] = $data;
+			}
+		}
+		$translation = [];
+		foreach ($signTranslation as $lang => $data) {
+			$translation[$lang] = [];
+			foreach ($data as $key => $val) {
+				$translation[$lang]['key'][] = '$' . $key . '$';
+				$translation[$lang]['val'][] = $val;
+			}
+		}
+		if(!isset($translation['English'])) {
+			$translation['English'] = [
+				'key' => [],
+				'val' => []
+			];
+		}
+		$this->signTranslation = $translation;
+	}
+	
+	public function getSignTranslation() {
+		return $this->signTranslation;
+	}	
+		
+	public function setGlobalCompassPosition($x, $z) {
+		$this->globalCompasPosition['x'] = $x;
+		$this->globalCompasPosition['z'] = $z;
+	}
+
+	public function getGlobalCompassPosition() {
+		return $this->globalCompasPosition;
+	}	
 
 }

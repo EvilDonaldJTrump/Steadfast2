@@ -19,25 +19,38 @@
  *
 */
 
-namespace pocketmine\network\protocol;
+namespace pocketmine\block;
 
-#include <rules/DataPacket.h>
+use pocketmine\item\Item;
+use pocketmine\item\Tool;
 
+class SpruceDoor extends Door{
 
-class RemovePlayerPacket extends DataPacket{
-	const NETWORK_ID = Info::REMOVE_PLAYER_PACKET;
+	protected $id = self::SPRUCE_DOOR_BLOCK;
 
-	public $eid;
-	public $clientId;
-
-	public function decode(){
-
+	public function __construct($meta = 0){
+		$this->meta = $meta;
 	}
 
-	public function encode(){
-		$this->reset();
-		$this->putLong($this->eid);
-		$this->putUUID($this->clientId);
+	public function getName(){
+		return "Spruce Door Block";
 	}
 
+	public function canBeActivated(){
+		return true;
+	}
+
+	public function getHardness(){
+		return 3;
+	}
+
+	public function getToolType(){
+		return Tool::TYPE_AXE;
+	}
+
+	public function getDrops(Item $item){
+		return [
+			[Item::SPRUCE_DOOR_BLOCK, 0, 1],
+		];
+	}
 }

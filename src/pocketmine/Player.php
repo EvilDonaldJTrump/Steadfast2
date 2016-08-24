@@ -142,6 +142,7 @@ use pocketmine\block\Liquid;
 use pocketmine\network\protocol\ServerToClientHandshake;
 
 
+
 /**
  * Main class that handles networking, recovery, and packet sending to the server part
  */
@@ -257,7 +258,8 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 	
 	protected $identifier;
 	
-	protected $additionalChar;
+	/**@var string*/
+	public $language = 'English';
 
 	public function getLeaveMessage(){
 		return "";
@@ -661,13 +663,19 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 	public function sendChunk($x, $z, $payload){
 		if($this->connected === false){
 			return;
+		}		
+
+		if(isset($payload[$this->language])) {
+			$data = $payload[$this->language];
+		} else {
+			$data = $payload['English'];
 		}
 
 		$this->usedChunks[Level::chunkHash($x, $z)] = true;
 		$this->chunkLoadCount++;
 
 		$pk = new BatchPacket();
-		$pk->payload = $payload;
+		$pk->payload = $data;
 		$pk->encode();
 		$pk->isEncoded = true;
 		$this->dataPacket($pk);
@@ -1408,7 +1416,7 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 						if($to->distanceSquared($ev->getTo()) > 0.01){ //If plugins modify the destination
 							$this->teleport($ev->getTo());						
 						}else{
-							$this->level->addEntityMovement($this->getViewers(), $this->getId(), $this->x, $this->y + $this->getEyeHeight(), $this->z, $this->yaw, $this->pitch, $this->yaw);
+							$this->level->addEntityMovement($this->getViewers(), $this->getId(), $this->x, $this->y + $this->getVisibleEyeHeight(), $this->z, $this->yaw, $this->pitch, $this->yaw);
 						}
 					}
 				}else{
@@ -1467,7 +1475,7 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 		if(parent::setMotion($mot)){
 			if($this->chunk !== null){
 				$this->level->addEntityMotion($this->getViewers(), $this->getId(), $this->motionX, $this->motionY, $this->motionZ);
-				$pk = new SetEntityMotionPacket($this->additionalChar);
+				$pk = new SetEntityMotionPacket();
 				$pk->entities[] = [0, $mot->x, $mot->y, $mot->z];
 				$this->dataPacket($pk);
 			}
@@ -1705,8 +1713,6 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 					break;
 				}
 				
-				$this->additionalChar = $packet->additionalChar;
-				
 				if($packet->isValidProtocol === false) {
 					$this->close("", TextFormat::RED . "Please switch to Minecraft: PE " . TextFormat::GREEN . $this->getServer()->getVersion() . TextFormat::RED . " to join.");
 					break;
@@ -1828,7 +1834,7 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				}		
 
 				$token =  $this->server->getServerToken();
-                if($this->server->isUseEncrypt() && $this->additionalChar == chr(0xfe)) {	
+				if($this->server->isUseEncrypt()) {	
 					$pk = new ServerToClientHandshake();
 					$pk->publicKey = $this->server->getServerPublicKey();
 					$pk->serverToken = $token;
@@ -1950,7 +1956,6 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				//Timings::$timerMobEqipmentPacket->stopTiming();
 				break;
 			case ProtocolInfo::USE_ITEM_PACKET:
-				$packet->decodeAddational($this->protocol); //hack for 0.14.3
 				//Timings::$timerUseItemPacket->startTiming();
 				if($this->spawned === false or $this->dead === true or $this->blocked){
 					//Timings::$timerUseItemPacket->stopTiming();
@@ -2524,6 +2529,8 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				$this->server->getPluginManager()->callEvent($ev);
 				if($ev->isCancelled()){
 					$this->inventory->sendSlot($slot, $this);
+					$this->inventory->setHotbarSlotIndex($slot, $slot);
+					$this->inventory->sendContents($this);
 					//Timings::$timerDropItemPacket->stopTiming();
 					break;
 				}
@@ -2836,7 +2843,7 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				}
 
 
-				if($this->currentTransaction === null or $this->currentTransaction->getCreationTime() < (microtime(true) - 8)){
+				if($this->currentTransaction === null or $this->currentTransaction->getCreationTime() < (microtime(true) - 0.8)){
 					if($this->currentTransaction !== null){
 						foreach($this->currentTransaction->getInventories() as $inventory){
 							if($inventory instanceof PlayerInventory){
@@ -3111,7 +3118,7 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 			$this->connected = false;
 			if($this->username != ""){
 				$this->server->getPluginManager()->callEvent($ev = new PlayerQuitEvent($this, $message, $reason));
-				if($this->server->getAutoSave() and $this->loggedIn === true){
+				if($this->server->getSavePlayerData() and $this->loggedIn === true){
 					$this->save();
 				}
 			}
@@ -3634,10 +3641,10 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 	
 	public function getIdentifier(){
 		return $this->identifier;
-	}
+	}	
 	
-	public function getAdditionalChar() {
-		return $this->additionalChar;
+	public function getVisibleEyeHeight() {
+		return $this->eyeHeight;
 	}
 
 	public $encryptEnabled = false;	

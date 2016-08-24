@@ -108,7 +108,7 @@ class PacketEncoder extends Worker {
 		}
 
 		$pk = new EncapsulatedPacket();
-		$pk->buffer = $data['additionalChar'] . $buffer;
+		$pk->buffer = chr(0xfe) . $buffer;
 		$pk->reliability = 3;
 		$flags = RakLib::PRIORITY_NORMAL;
 		$this->externalQueue[] = chr(RakLib::PACKET_ENCAPSULATED) . chr(strlen($data['identifier'])) . $data['identifier'] . chr($flags) . $pk->toBinary(true);

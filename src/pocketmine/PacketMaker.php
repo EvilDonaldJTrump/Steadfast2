@@ -84,66 +84,67 @@ class PacketMaker extends Worker {
 	protected function checkPacket($data) {
 		if (isset($data['moveData'])) {
 			foreach ($data['moveData'] as $identifier => $moveData) {
+				$moveStr = "";
 				foreach ($moveData['data'] as $singleMoveData) {
-					$pk = new MoveEntityPacket($moveData['additionalChar']);
+					$pk = new MoveEntityPacket();
 					$pk->entities = [$singleMoveData];
-					$res = $this->makeBuffer($identifier, $moveData['additionalChar'], $pk, false, false);
-					$this->externalQueue[] = $res;
+					$pk->encode();
+					$moveStr .= Binary::writeInt(strlen($pk->buffer)) . $pk->buffer;					
 				}
+				$buffer = zlib_encode($moveStr, ZLIB_ENCODING_DEFLATE, 7);
+				$pkBatch = new BatchPacket();
+				$pkBatch->payload = $buffer;
+				$pkBatch->encode();
+				$pkBatch->isEncoded = true;
+				$this->externalQueue[] = $this->makeBuffer($identifier, $pkBatch, false, false);
 			}	
 			foreach ($data['motionData'] as $identifier => $motionData) {
+				$motionStr = "";
 				foreach ($motionData['data'] as $singleMotionData) {
-					$pk = new SetEntityMotionPacket($motionData['additionalChar']);
+					$pk = new SetEntityMotionPacket();
 					$pk->entities = [$singleMotionData];
-					$res = $this->makeBuffer($identifier, $motionData['additionalChar'], $pk, false, false);
-					$this->externalQueue[] = $res;
+					$pk->encode();
+					$motionStr .= Binary::writeInt(strlen($pk->buffer)) . $pk->buffer;		
 				}
+				$buffer = zlib_encode($motionStr, ZLIB_ENCODING_DEFLATE, 7);
+				$pkBatch = new BatchPacket();
+				$pkBatch->payload = $buffer;
+				$pkBatch->encode();
+				$pkBatch->isEncoded = true;
+				$this->externalQueue[] = $this->makeBuffer($identifier, $pkBatch, false, false);
 			}
 		} elseif($data['isBatch']) {
 			$str = "";
-			$str15 = "";
 			foreach($data['packets'] as $p){
 				if($p instanceof DataPacket){
 					if(!$p->isEncoded){					
 						$p->encode();
 					}
-					$str .= Binary::writeInt(strlen($p->buffer)) . $p->buffer;
-					$p->updateBuffer(chr(0xfe));
-					$str15 .= Binary::writeInt(strlen($p->buffer)) . $p->buffer;
+					$str .= Binary::writeInt(strlen($p->buffer)) . $p->buffer;					
 				}else{					
 					$str .= Binary::writeInt(strlen($p)) . $p;
-					$pkId = ord($p{0});
-					$p{0} = chr(DataPacket::$pkKeysRev[$pkId]);
-					$str15 .= Binary::writeInt(strlen($p)) . $p;
 				}
 			}
 			$buffer = zlib_encode($str, ZLIB_ENCODING_DEFLATE, $data['networkCompressionLevel']);
-			$buffer15 = zlib_encode($str15, ZLIB_ENCODING_DEFLATE, $data['networkCompressionLevel']);
 			$pk = new BatchPacket();
 			$pk->payload = $buffer;
 			$pk->encode();
 			$pk->isEncoded = true;
 			
-			$pk15 = new BatchPacket();
-			$pk15->payload = $buffer15;
-			$pk15->encode();
-			$pk15->isEncoded = true;
 			foreach($data['targets'] as $target){
-				$this->externalQueue[] = $this->makeBuffer($target[0], $target[1], ($target[1] == chr(0xfe) ? $pk15 : $pk), false, false);
+				$this->externalQueue[] = $this->makeBuffer($target[0], $pk, false, false);
 			}
 		}
 		
 	}
-        
-	protected function makeBuffer($identifier, $additionalChar, $fullPacket, $needACK, $identifierACK) {
+
+	protected function makeBuffer($identifier, $fullPacket, $needACK, $identifierACK) {		
 		if (!$fullPacket->isEncoded) {
 			$fullPacket->encode();
 		}
-		$fullPacket->updateBuffer($additionalChar);
 		$data = array(
 			'identifier' => $identifier,
-			'buffer' => $fullPacket->buffer,
-			'additionalChar' => $additionalChar
+			'buffer' => $fullPacket->buffer
 		);
 		return serialize($data);
 	}

@@ -111,6 +111,7 @@ use pocketmine\level\generator\LightPopulationTask;
 use pocketmine\level\generator\PopulationTask;
 use pocketmine\entity\monster\Monster;
 use pocketmine\entity\animal\Animal;
+use pocketmine\nbt\NBT;
 
 
 
@@ -633,7 +634,7 @@ class Level implements ChunkManager, Metadatable{
 							/** @var Block $b */
 							foreach($blocks as $b){
 								foreach ($this->getUsingChunk($b->x >> 4, $b->z >> 4) as $player) {								
-									$pk = new UpdateBlockPacket($player->getAdditionalChar());
+									$pk = new UpdateBlockPacket();
 									$pk->records[] = [$b->x, $b->z, $b->y, $b->getId(), $b->getDamage(), UpdateBlockPacket::FLAG_ALL];
 									$player->dataPacket($pk);
 								}
@@ -674,7 +675,7 @@ class Level implements ChunkManager, Metadatable{
 		}
 		
 		while(($data = unserialize($this->chunkMaker->readThreadToMainPacket()))){
-			$this->chunkRequestCallback($data['chunkX'], $data['chunkZ'], $data['result'], $data['result15']);
+			$this->chunkRequestCallback($data['chunkX'], $data['chunkZ'], $data);
 		}
 		$this->timings->doTick->stopTiming();
 	}
@@ -690,7 +691,7 @@ class Level implements ChunkManager, Metadatable{
 				continue;
 			}
 			foreach ($target as $player) {
-				$pk = new UpdateBlockPacket($player->getAdditionalChar());
+				$pk = new UpdateBlockPacket();
 				if ($b instanceof Block) {
 					$pk->records[] = [$b->x, $b->z, $b->y, $b->getId(), $b->getDamage(), $flags];
 				} else {
@@ -1222,6 +1223,13 @@ class Level implements ChunkManager, Metadatable{
 			}
 		}
 	}
+	
+	public function chunkCacheClear($x, $z){
+		$index = PHP_INT_SIZE === 8 ? (($x & 0xFFFFFFFF) << 32) | ($z & 0xFFFFFFFF) : $x . ":" . $z;
+		if(ADVANCED_CACHE == true){
+			Cache::remove("world:" . $this->getId() . ":" . $index);
+		}
+	}
 
 	/**
 	 * Sets on Vector3 the data from a Block object,
@@ -1256,7 +1264,6 @@ class Level implements ChunkManager, Metadatable{
 			$index = PHP_INT_SIZE === 8 ? ((($pos->x >> 4) & 0xFFFFFFFF) << 32) | (( $pos->z >> 4) & 0xFFFFFFFF) : ($pos->x >> 4) . ":" . ( $pos->z >> 4);
 			if(ADVANCED_CACHE == true){
 				Cache::remove("world:" . $this->getId() . ":" . $index);
-				Cache::remove("world15:" . $this->getId() . ":" . $index);
 			}
 
 			if($direct === true){
@@ -1324,11 +1331,7 @@ class Level implements ChunkManager, Metadatable{
 					new FloatTag("", 0)
 				]),
 				"Health" => new ShortTag("Health", 5),
-				"Item" => new Compound("Item", [
-					"id" => new ShortTag("id", $item->getId()),
-					"Damage" => new ShortTag("Damage", $item->getDamage()),
-					"Count" => new ByteTag("Count", $item->getCount())
-				]),
+				"Item" => NBT::putItemHelper($item),
 				"PickupDelay" => new ShortTag("PickupDelay", $delay)
 			]));
 
@@ -1512,13 +1515,19 @@ class Level implements ChunkManager, Metadatable{
 		if($hand->isSolid() === true and $hand->getBoundingBox() !== null){
 			$entities = $this->getCollidingEntities($hand->getBoundingBox());
 			$realCount = 0;
-			foreach($entities as $e){
-				if($e instanceof Arrow or $e instanceof DroppedItem){
+			foreach ($entities as $e) {
+				if ($e instanceof Arrow or $e instanceof DroppedItem) {
 					continue;
 				}
-				if($e instanceof Player && $e->isSpectator()){
+				if ($e instanceof Player && $e->isSpectator()) {
 					continue;
 				}
+				if ($e == $player) {
+					if (round($player->getY()) != round($hand->getY()) && round($player->getY() + 1) != round($hand->getY())) {
+						continue;
+					}
+				}
+
 				++$realCount;
 			}
 
@@ -1526,7 +1535,6 @@ class Level implements ChunkManager, Metadatable{
 				return false; //Entity in block
 			}
 		}
-
 
 		if($player instanceof Player){
 			if($player->isSpectator()){
@@ -1958,7 +1966,6 @@ class Level implements ChunkManager, Metadatable{
 			$this->chunks[$index] = $chunk;
 		}
 		if(ADVANCED_CACHE == true){
-			Cache::remove("world15:" . $this->getId() . ":" . PHP_INT_SIZE === 8 ? ((($x) & 0xFFFFFFFF) << 32) | (( $z) & 0xFFFFFFFF) : ($x) . ":" . ( $z));
 			Cache::remove("world:" . $this->getId() . ":" . PHP_INT_SIZE === 8 ? ((($x) & 0xFFFFFFFF) << 32) | (( $z) & 0xFFFFFFFF) : ($x) . ":" . ( $z));
 		}
 		$chunk->setChanged();
@@ -2048,11 +2055,11 @@ class Level implements ChunkManager, Metadatable{
 					continue;
 				}
 				if(PHP_INT_SIZE === 8){ $x = ($index >> 32) << 32 >> 32; $z = ($index & 0xFFFFFFFF) << 32 >> 32;}else{list( $x, $z) = explode(":", $index); $x = (int) $x; $z = (int) $z;};
-				if(ADVANCED_CACHE == true and ($cache = Cache::get("world:" . $this->getId() . ":" . $index)) !== false and ($cache15 = Cache::get("world15:" . $this->getId() . ":" . $index)) !== false){
+				if(ADVANCED_CACHE == true and ($cache = Cache::get("world:" . $this->getId() . ":" . $index)) !== false){
 					/** @var Player[] $players */
 					foreach($players as $player){
 						if($player->isConnected() and isset($player->usedChunks[$index])){
-							$player->sendChunk($x, $z, ($player->getAdditionalChar() == chr(0xfe) ? $cache15 : $cache));
+							$player->sendChunk($x, $z, $cache);
 						}
 					}
 					unset($this->chunkSendQueue[$index]);
@@ -2071,18 +2078,17 @@ class Level implements ChunkManager, Metadatable{
 		}
 	}
 
-	public function chunkRequestCallback($x, $z, $payload, $payload15){
+	public function chunkRequestCallback($x, $z, $payload){
 		$index = PHP_INT_SIZE === 8 ? ((($x) & 0xFFFFFFFF) << 32) | (( $z) & 0xFFFFFFFF) : ($x) . ":" . ( $z);
 		if(isset($this->chunkSendTasks[$index])){
 
 			if(ADVANCED_CACHE == true){
 				Cache::add("world:" . $this->getId() . ":" . $index, $payload, 60);
-				Cache::add("world15:" . $this->getId() . ":" . $index, $payload15, 60);
 			}
 			foreach($this->chunkSendQueue[$index] as $player){
 				/** @var Player $player */
 				if($player->isConnected() and isset($player->usedChunks[$index])){
-					$player->sendChunk($x, $z, ($player->getAdditionalChar() == chr(0xfe) ? $payload15 : $payload));
+					$player->sendChunk($x, $z, $payload);
 					
 				}
 			}
@@ -2536,8 +2542,7 @@ class Level implements ChunkManager, Metadatable{
 		foreach ($viewers as $p) {
 			if(!isset($this->motionToSend[$p->getIdentifier()])){
 				$this->motionToSend[$p->getIdentifier()] = array(
-					'data' => array(),
-					'additionalChar' => $p->getAdditionalChar()
+					'data' => array()
 				);
 			}
 			$this->motionToSend[$p->getIdentifier()]['data'][] = $motion;
@@ -2549,8 +2554,7 @@ class Level implements ChunkManager, Metadatable{
 		foreach ($viewers as $p) {
 			if(!isset($this->moveToSend[$p->getIdentifier()])){
 				$this->moveToSend[$p->getIdentifier()] = array(
-					'data' => array(),
-					'additionalChar' => $p->getAdditionalChar()
+					'data' => array()
 				);
 			}
 			$this->moveToSend[$p->getIdentifier()]['data'][] = $move;

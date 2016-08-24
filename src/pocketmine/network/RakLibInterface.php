@@ -38,7 +38,7 @@ use raklib\server\ServerHandler;
 use raklib\server\ServerInstance;
 
 class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
-
+	
 	/** @var Server */
 	private $server;
 
@@ -245,42 +245,29 @@ class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 				$this->server->batchPackets([$player], [$packet], true);
 				return null;
 			}
-			$additionalChar =  $player->getAdditionalChar();
-			$packet->updateBuffer($additionalChar);
 			$data = array(
 				'identifier' => $this->identifiers[$player],
 				'buffer' => $packet->buffer,
-				'additionalChar' =>$additionalChar
 			);
 			$this->server->packetEncoder->pushMainToThreadPacket(serialize($data));
 		}
 		return null;
 	}
 	
+
 	private function getPacket($buffer, $player){
 		if(ord($buffer{0}) == 254){
 			$buffer = substr($buffer, 1);
 			if($player->encryptEnabled) {
 				$buffer = $player->getDecrypt($buffer);
 			}
-			$additionalChar = chr(0xfe);                       
-			$pid = DataPacket::$pkKeys[ord($buffer{0})];			
-		} elseif(ord($buffer{0}) == 142) {
-			$buffer = substr($buffer, 1);	
-			$additionalChar = chr(0x8e);
-			$pid = ord($buffer{0});
+			$pid = ord($buffer{0});					
 		} else {
 			return;
-//			$additionalChar = chr(0);
-//			$pid = ord($buffer{0});
 		}
 
 		if(($data = $this->network->getPacket($pid)) === null){
 			return null;
-		}
-		
-		if($pid == 0x8f) {
-			$buffer = chr($pid) . $additionalChar . substr($buffer, 1);
 		}
 		
 		$data->setBuffer($buffer, 1);

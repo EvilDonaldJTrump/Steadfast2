@@ -19,40 +19,17 @@
  *
 */
 
-namespace pocketmine\network\protocol;
+namespace pocketmine\item;
 
-#include <rules/DataPacket.h>
+use pocketmine\block\Block;
 
-
-class SetEntityMotionPacket extends DataPacket{
-	const NETWORK_ID = Info::SET_ENTITY_MOTION_PACKET;
-
-
-	// eid, motX, motY, motZ
-	/** @var array[] */
-	public $entities = [];
-	
-	public function __construct() {
-		parent::__construct("", 0);
+class SpruceDoor extends Item{
+	public function __construct($meta = 0, $count = 1){
+		$this->block = Block::get(Item::SPRUCE_DOOR_BLOCK);
+		parent::__construct(self::SPRUCE_DOOR_BLOCK, 0, $count, "Spruce Door");
 	}
 
-	public function clean(){
-		$this->entities = [];
-		return parent::clean();
+	public function getMaxStackSize(){
+		return 1;
 	}
-
-	public function decode(){
-
-	}
-
-	public function encode(){
-		$this->reset();
-		foreach($this->entities as $d){
-			$this->putLong($d[0]); //eid
-			$this->putFloat($d[1]); //motX
-			$this->putFloat($d[2]); //motY
-			$this->putFloat($d[3]); //motZ
-		}
-	}
-
 }
