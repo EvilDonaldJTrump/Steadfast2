@@ -35,6 +35,8 @@ interface Info{
 //	const OLDEST_PROTOCOL = 81;
 	const ACCEPTED_PROTOCOLS = [81, 82];
 
+	const SERVER_TO_CLIENT_HANDSHAKE = 0x03;
+	const CLIENT_TO_SERVER_HANDSHAKE = 0x04;
 	/**
 	 * Minecraft: PE packets
 	 */
