@@ -226,6 +226,11 @@ class PluginManager{
 								if($version[1] > $apiVersion[1]){
 									continue;
 								}
+ 								//If the plugin uses new API
+								if($version[0] < $apiVersion[0]){
+ 									$compatible = true;
+  									break;
+  								}
 
 								$compatible = true;
 								break;
