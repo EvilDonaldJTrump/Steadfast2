@@ -218,19 +218,6 @@ class PluginManager{
 								//Format: majorVersion.minorVersion.patch
 								$version = array_map("intval", explode(".", $version));
 								$apiVersion = array_map("intval", explode(".", $this->server->getApiVersion()));
- 								//Completely different API version
-  								if($version[0] > $apiVersion[0]){
-  									continue;
-  								}
-  								//If the plugin uses new API
-  								if($version[0] < $apiVersion[0]){
- 									$compatible = true;
-  									break;
- 								}
-  								//If the plugin requires new API features, being backwards compatible
- 								if($version[1] > $apiVersion[1]){
- 									continue;
-  								}
 
 								$compatible = true;
 								break;
